@@ -39,4 +39,7 @@ func main() {
 	}()
 
 	err = cmd.Wait()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
