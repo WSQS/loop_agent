@@ -110,7 +110,8 @@ func execute(cmd *exec.Cmd, tag string) {
 }
 
 func main() {
-	dir := ".loop_agent/" + time.Now().Format("060102150405")
+	timestamp := time.Now().Format("060102150405")
+	dir := ".loop_agent/" + timestamp
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		log.Fatal(err)
 	}
@@ -121,9 +122,13 @@ func main() {
 	defer f.Close()
 	log.SetOutput(io.MultiWriter(os.Stdout, f))
 	log.Println("[LOG] Log in ", dir)
+	cmd := exec.Command("git", "status")
+	execute(cmd, "GIT-STATUS")
+	cmd = exec.Command("git", "checkout", "-b", "ai/gen/loop-"+timestamp)
+	execute(cmd, "GIT-STATUS")
 	for i := 0; i < 500; i++ {
 		log.Println("[Iter]", "Iter", i, "begin")
-		cmd := exec.Command("iflow", "-y", "-d", "--thinking", "--prompt", "/init")
+		cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt", "/init")
 		execute(cmd, "IFLOW-INIT")
 
 		cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
