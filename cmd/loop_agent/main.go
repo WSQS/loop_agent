@@ -190,7 +190,7 @@ Execution Requirements:
 
 4. Commit Message Requirements
    - Every commit message MUST follow this structure:
-     "<type>[{{iteration}}][{{attempt}}]: <short description>"
+     "<type>[iter-{{iteration}}][atmp-{{attempt}}]: <short description>"
    - "<type>" must be semantically appropriate (e.g., fix, feat, docs, chore, refactor).
    - The description must be concise and accurately reflect the change purpose.
 
