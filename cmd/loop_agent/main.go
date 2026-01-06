@@ -74,7 +74,7 @@ COMMIT:
 
 func execute(cmd *exec.Cmd, tag string) {
 	command := cmd.String()
-	log.Println(command)
+	log.Println("[exec] command:", command)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Fatal(err)
@@ -105,7 +105,7 @@ func execute(cmd *exec.Cmd, tag string) {
 
 	err = cmd.Wait()
 	if err != nil {
-		log.Fatal(command, " error ", err)
+		log.Fatalln("[exec]", command, "error:", err)
 	}
 }
 
