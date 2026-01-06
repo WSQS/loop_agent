@@ -152,31 +152,59 @@ func cleanup() {
 		}
 		cmd := exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
 		prompt := `
-Task: Clean up the current Git repository by handling all uncommitted and modified files.
+Role: iflow AI coding agent
 
-Requirements:
-1. Review the current repository state and identify all uncommitted and modified files.
+Task:
+Clean up the Git repository by properly handling all uncommitted and modified files listed below.
 
-2. For binary files and irrelevant files:
-   - Determine which files should not be tracked or committed.
-   - Update ".gitignore" to ensure these binary or irrelevant files are ignored by Git.
-   - Do not commit the ignored files themselves.
-
-3. For files that should be committed:
-   - Group changes by their change purpose (i.e., why the change was made).
-   - Split the work into multiple atomic commits, where each commit represents a single, clear change purpose.
-   - Ensure each commit is self-contained and does not mix unrelated changes.
-
-4. Operate on the following files (to be filled at runtime):
+Files in Scope:
 
 {{files}}
+Scope and Constraints:
+- You MAY scan the entire repository to understand context, file types, and relationships.
+- You may ONLY modify and commit files explicitly listed.
+- Do NOT modify, commit, or delete any other files.
+- The following actions are strictly prohibited:
+  - Deleting any files
+  - Squashing commits
+  - Modifying existing commit history
+
+Execution Requirements:
+
+1. Repository Review
+   - Review the repository state and Git status.
+   - Identify which files in Files in Scope are uncommitted or modified.
+
+2. Handling Binary or Irrelevant Files
+   - Independently determine which files in Files in Scope should NOT be tracked or committed (e.g., binary files or irrelevant artifacts).
+   - Update ".gitignore" to ignore these files or corresponding patterns.
+   - Do NOT commit the ignored files themselves.
+   - Commit the ".gitignore" change in ONE standalone commit.
+
+3. Handling Files to Be Committed
+   - For all remaining files in Files in Scope that should be committed:
+     - Group changes strictly by change purpose (the underlying reason for the change).
+     - Split the work into multiple atomic commits.
+     - Each commit may include multiple files, but MUST represent exactly one clear and coherent change purpose.
+     - Do NOT mix unrelated change purposes within a single commit.
+
+4. Commit Message Requirements
+   - Every commit message MUST follow this structure:
+     "<type>[{{iteration}}][{{attempt}}]: <short description>"
+   - "<type>" must be semantically appropriate (e.g., fix, feat, docs, chore, refactor).
+   - The description must be concise and accurately reflect the change purpose.
+
 Output Expectations:
-- ".gitignore" is updated appropriately to ignore binary and irrelevant files.
-- Necessary changes are committed in multiple atomic commits, organized by change purpose.
-- No large, mixed-purpose commits are created.`
+- ".gitignore" is updated and committed in a single, dedicated commit if required.
+- All other necessary changes are committed as multiple atomic commits, organized by change purpose.
+- No commit contains mixed or unrelated changes.
+- No prohibited Git operations are performed.
+`
 
 		iterationDir := GetInstance().dir + "/iter-" + strconv.Itoa(GetInstance().iteration)
 		prompt = strings.ReplaceAll(prompt, "{{files}}", string(files))
+		prompt = strings.ReplaceAll(prompt, "{{iteration}}", strconv.Itoa(GetInstance().iteration))
+		prompt = strings.ReplaceAll(prompt, "{{attempt}}", strconv.Itoa(GetInstance().attemptCount))
 		os.WriteFile(iterationDir+"/cleanup-"+strconv.Itoa(GetInstance().attemptCount)+"-prompt.txt", []byte(prompt), 0644)
 		cmd.Stdin = strings.NewReader(prompt)
 		execute(cmd, "IFLOW-INIT")
