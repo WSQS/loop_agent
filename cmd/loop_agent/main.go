@@ -212,6 +212,20 @@ Output Expectations:
 	log.Println("[CLEANUP] Clean up finished")
 }
 
+func validate() (int, string) {
+	cmd := exec.Command("./validate.sh")
+	out, err := cmd.CombinedOutput()
+	output := string(out)
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode := exitErr.ExitCode()
+			return exitCode, output
+		}
+		return -1, err.Error() + output
+	}
+	return 0, output
+}
+
 func main() {
 	timestamp := time.Now().Format("060102150405")
 	GetInstance().dir = ".loop_agent/" + timestamp
@@ -246,8 +260,15 @@ func main() {
 
 		cleanup()
 
+		exitCode, output := validate()
+
 		cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
-		prompt := strings.ReplaceAll(promptTp, "{{FAIL}}", "")
+		var prompt string
+		if exitCode != 0 {
+			prompt = strings.ReplaceAll(promptTp, "{{FAIL}}", "[exit code:"+strconv.Itoa(exitCode)+"]"+output)
+		} else {
+			prompt = strings.ReplaceAll(promptTp, "{{FAIL}}", "")
+		}
 		os.WriteFile(iterationDir+"/work-prompt.txt", []byte(prompt), 0644)
 		cmd.Stdin = strings.NewReader(prompt)
 		execute(cmd, "IFLOW-WORK")
