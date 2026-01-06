@@ -74,7 +74,7 @@ COMMIT:
 
 func execute(cmd *exec.Cmd, tag string) {
 	command := cmd.String()
-	log.Println("[exec] command:", command)
+	log.Println("[EXEC] command:", command)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Fatal(err)
@@ -105,7 +105,7 @@ func execute(cmd *exec.Cmd, tag string) {
 
 	err = cmd.Wait()
 	if err != nil {
-		log.Fatalln("[exec]", command, "error:", err)
+		log.Fatalln("[EXEC]", command, "error:", err)
 	}
 }
 
@@ -120,8 +120,7 @@ func main() {
 	}
 	defer f.Close()
 	log.SetOutput(io.MultiWriter(os.Stdout, f))
-	log.Println("Log in ", dir)
-	log.Println("hello, go module!")
+	log.Println("[LOG] Log in ", dir)
 	for i := 0; i < 500; i++ {
 		log.Println("[Iter]", "Iter", i, "begin")
 		cmd := exec.Command("iflow", "-y", "-d", "--thinking", "--prompt", "/init")
