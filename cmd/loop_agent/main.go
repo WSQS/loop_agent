@@ -122,12 +122,14 @@ func main() {
 	log.SetOutput(io.MultiWriter(os.Stdout, f))
 	log.Println("Log in ", dir)
 	log.Println("hello, go module!")
-	for {
+	for i := 0; i < 500; i++ {
+		log.Println("[Iter]", "Iter", i, "begin")
 		cmd := exec.Command("iflow", "-y", "-d", "--thinking", "--prompt", "/init")
 		execute(cmd, "IFLOW-INIT")
 
 		cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
 		cmd.Stdin = strings.NewReader(strings.ReplaceAll(promptTp, "{{FAIL}}", ""))
 		execute(cmd, "IFLOW-WORK")
+		log.Println("[Iter]", "Iter", i, "end")
 	}
 }
