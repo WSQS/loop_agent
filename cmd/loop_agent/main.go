@@ -6,7 +6,9 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -72,6 +74,24 @@ COMMIT:
 - FILES_COMMITTED: <list or NONE>
 `
 
+type Singleton struct {
+	iteration    int
+	attemptCount int
+	dir          string
+}
+
+var (
+	instance *Singleton
+	once     sync.Once
+)
+
+func GetInstance() *Singleton {
+	once.Do(func() {
+		instance = &Singleton{}
+	})
+	return instance
+}
+
 func execute(cmd *exec.Cmd, tag string) {
 	command := cmd.String()
 	log.Println("[EXEC] command:", command)
@@ -109,31 +129,103 @@ func execute(cmd *exec.Cmd, tag string) {
 	}
 }
 
+func is_repo_dirty() (bool, []byte) {
+	cmd := exec.Command("git", "status", "--porcelain=v1")
+	command := cmd.String()
+	output, err := cmd.Output()
+	if err != nil {
+		log.Fatalln("[EXEC]", command, "error:", err)
+	}
+	is_dirty := len(output) > 0
+	return is_dirty, output
+}
+
+func cleanup() {
+	if dirty_flag, _ := is_repo_dirty(); !dirty_flag {
+		return
+	}
+	log.Println("[CLEANUP] Repo is dirty, clean up")
+	for ; ; GetInstance().attemptCount++ {
+		dirty, files := is_repo_dirty()
+		if !dirty {
+			break
+		}
+		cmd := exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
+		prompt := `
+Task: Clean up the current Git repository by handling all uncommitted and modified files.
+
+Requirements:
+1. Review the current repository state and identify all uncommitted and modified files.
+
+2. For binary files and irrelevant files:
+   - Determine which files should not be tracked or committed.
+   - Update ".gitignore" to ensure these binary or irrelevant files are ignored by Git.
+   - Do not commit the ignored files themselves.
+
+3. For files that should be committed:
+   - Group changes by their change purpose (i.e., why the change was made).
+   - Split the work into multiple atomic commits, where each commit represents a single, clear change purpose.
+   - Ensure each commit is self-contained and does not mix unrelated changes.
+
+4. Operate on the following files (to be filled at runtime):
+
+{{files}}
+Output Expectations:
+- ".gitignore" is updated appropriately to ignore binary and irrelevant files.
+- Necessary changes are committed in multiple atomic commits, organized by change purpose.
+- No large, mixed-purpose commits are created.`
+
+		iterationDir := GetInstance().dir + "/iter-" + strconv.Itoa(GetInstance().iteration)
+		prompt = strings.ReplaceAll(prompt, "{{files}}", string(files))
+		os.WriteFile(iterationDir+"/cleanup-"+strconv.Itoa(GetInstance().attemptCount)+"-prompt.txt", []byte(prompt), 0644)
+		cmd.Stdin = strings.NewReader(prompt)
+		execute(cmd, "IFLOW-INIT")
+	}
+	log.Println("[CLEANUP] Clean up finished")
+}
+
 func main() {
 	timestamp := time.Now().Format("060102150405")
-	dir := ".loop_agent/" + timestamp
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	GetInstance().dir = ".loop_agent/" + timestamp
+	if err := os.MkdirAll(GetInstance().dir, 0755); err != nil {
 		log.Fatal(err)
 	}
-	f, err := os.OpenFile(dir+"/log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	f, err := os.OpenFile(GetInstance().dir+"/log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer f.Close()
 	log.SetOutput(io.MultiWriter(os.Stdout, f))
-	log.Println("[LOG] Log in ", dir)
+	log.Println("[LOG] Log in ", GetInstance().dir)
 	cmd := exec.Command("git", "status")
 	execute(cmd, "GIT-STATUS")
 	cmd = exec.Command("git", "checkout", "-b", "ai/gen/loop-"+timestamp)
 	execute(cmd, "GIT-STATUS")
-	for i := 0; i < 500; i++ {
-		log.Println("[Iter]", "Iter", i, "begin")
+	for GetInstance().iteration = 1; GetInstance().iteration < 500; GetInstance().iteration++ {
+		log.Println("[Iter]", "Iter", GetInstance().iteration, "begin")
+
+		GetInstance().attemptCount = 1
+
+		iterationDir := GetInstance().dir + "/iter-" + strconv.Itoa(GetInstance().iteration)
+		if err := os.MkdirAll(iterationDir, 0755); err != nil {
+			log.Fatal(err)
+		}
+
+		cleanup()
+
 		cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt", "/init")
 		execute(cmd, "IFLOW-INIT")
 
+		cleanup()
+
 		cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
-		cmd.Stdin = strings.NewReader(strings.ReplaceAll(promptTp, "{{FAIL}}", ""))
+		prompt := strings.ReplaceAll(promptTp, "{{FAIL}}", "")
+		os.WriteFile(iterationDir+"/work-prompt.txt", []byte(prompt), 0644)
+		cmd.Stdin = strings.NewReader(prompt)
 		execute(cmd, "IFLOW-WORK")
-		log.Println("[Iter]", "Iter", i, "end")
+
+		cleanup()
+
+		log.Println("[Iter]", "Iter", GetInstance().iteration, "end")
 	}
 }
