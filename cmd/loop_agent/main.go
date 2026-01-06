@@ -207,7 +207,7 @@ Output Expectations:
 		prompt = strings.ReplaceAll(prompt, "{{attempt}}", strconv.Itoa(GetInstance().attemptCount))
 		os.WriteFile(iterationDir+"/cleanup-"+strconv.Itoa(GetInstance().attemptCount)+"-prompt.txt", []byte(prompt), 0644)
 		cmd.Stdin = strings.NewReader(prompt)
-		execute(cmd, "IFLOW-INIT")
+		execute(cmd, "IFLOW-CLEANUP")
 	}
 	log.Println("[CLEANUP] Clean up finished")
 }
