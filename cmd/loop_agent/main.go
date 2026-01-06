@@ -162,7 +162,7 @@ Files in Scope:
 {{files}}
 Scope and Constraints:
 - You MAY scan the entire repository to understand context, file types, and relationships.
-- You may ONLY modify and commit files explicitly listed.
+- You may ONLY modify ".gitignore" and commit files explicitly listed.
 - Do NOT modify, commit, or delete any other files.
 - The following actions are strictly prohibited:
   - Deleting any files
