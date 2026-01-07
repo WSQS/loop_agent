@@ -293,17 +293,15 @@ func main() {
 
 		cleanup()
 
-		exitCode, output := validate()
-		cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
-		greenPrompt := strings.ReplaceAll(promptTp, "{{FAIL}}", "[exit code:"+strconv.Itoa(exitCode)+"]"+output)
-		os.WriteFile(iterationDir+"/green-prompt.txt", []byte(greenPrompt), 0644)
-		for {
-			exitCode, _ := validate()
+		for i := 1; ; i++ {
+			exitCode, output := validate()
 			if exitCode == 0 {
 				log.Println("[GREEN]", "Validate Success")
 				break
 			}
 			log.Println("[GREEN]", "Validate Failed")
+			greenPrompt := strings.ReplaceAll(promptTp, "{{FAIL}}", "[exit code:"+strconv.Itoa(exitCode)+"]"+output)
+			os.WriteFile(iterationDir+"/green-"+strconv.Itoa(i)+"-prompt.txt", []byte(greenPrompt), 0644)
 			cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
 			cmd.Stdin = strings.NewReader(greenPrompt)
 			execute(cmd, "IFLOW-GREEN")
