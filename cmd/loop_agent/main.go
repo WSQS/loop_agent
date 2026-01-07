@@ -276,7 +276,7 @@ func main() {
 		} else {
 			prompt = strings.ReplaceAll(promptTp, "{{FAIL}}", "")
 		}
-		os.WriteFile(iterationDir+"/work-prompt.txt", []byte(prompt), 0644)
+		os.WriteFile(iterationDir+"/green-prompt.txt", []byte(prompt), 0644)
 		for {
 			exitCode, _ := validate()
 			if exitCode == 0 {
