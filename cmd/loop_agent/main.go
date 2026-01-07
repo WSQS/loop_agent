@@ -291,6 +291,7 @@ func main() {
 		taskStr = string(taskByte)
 		taskStr = "下面是我的需求，请参考最近几次提交分析实现情况，并在tasks文件夹下创建进一步完善的需求或者是在此基础上实现新的需求\n" + taskStr
 		cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
+		os.WriteFile(iterationDir+"/evolve-prompt.txt", []byte(taskStr), 0644)
 		cmd.Stdin = strings.NewReader(taskStr)
 		execute(cmd, "IFLOW-EVOLVE")
 
