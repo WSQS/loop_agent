@@ -277,7 +277,7 @@ func main() {
 		cleanup()
 
 		specStr := string(specByte)
-		specStr = "下面是我的规范，请基于`不可修改条款`和`可验证验收标准`改动代码测试验证部分和测试脚本 @validate.sh\n 确保脚本因为未实现功能失败\n" + specStr
+		specStr = "下面是我的规范，请基于`不可修改条款`和`可验证验收标准`改动代码测试验证部分和测试脚本 @validate.sh\n确保脚本因为未实现功能失败\n除了测试验证代码和@validate.sh禁止修改其他内容" + specStr
 		os.WriteFile(iterationDir+"/red-prompt.txt", []byte(specStr), 0644)
 		for {
 			cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
