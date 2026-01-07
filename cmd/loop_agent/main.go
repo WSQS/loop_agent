@@ -13,65 +13,8 @@ import (
 )
 
 const promptTp = `
-You are an autonomous coding agent operating in a local Linux git repo.
-You are invoked repeatedly by an external loop script.
-
-AUTHORITATIVE CONTEXT
-- Requirements are in @requirements.md.
-- External validation command (run by the script) is:
-  g++ ./sob.cpp -o sob && ./sob && ./toy
-- sob builds ./toy from toy.cpp. toy.cpp is the main implementation.
-
-AGENT PRIORITY POLICY (STRICT)
-P0) Fix run/build failures first:
-- If the failure snippet indicates compile/link errors, runtime crash, or non-zero exit in validation,
-  focus ONLY on fixing that failure with the smallest change.
-- Do not attempt new features while P0 is failing.
-
-P1) Then verify requirements:
-- If P0 appears resolved (no current failure snippet / prior run likely succeeded),
-  check whether @requirements.md acceptance is fully satisfied (toy CASE outputs + exit codes).
-- Do not "fake" results. LLVM must be genuinely used.
-
-P2) If requirements are already satisfied:
-- Do NOT change implementation code.
-- Propose exactly ONE new incremental requirement and write it to NEXT_REQUIREMENTS.md with:
-  - Requirement statement
-  - Acceptance criteria
-  - Minimal test(s) / how it will be validated
-- Then STOP.
-
-SCOPE & HYGIENE
-- Prefer editing ONLY ./toy.cpp (and NEXT_REQUIREMENTS.md when in P2).
-- Do NOT modify/commit logs or generated artifacts:
-  .iflow_runs/, sob, toy, *.o, build/, *.ll
-
-ANTI-CHEATING
-- Do NOT hardcode expected CASE outputs.
-- Do NOT bypass evaluation by returning constants.
-
-ONE-CHANGESET + COMMIT (MANDATORY when changes exist)
-- Make ONE focused changeset.
-- If any source changes were made, create EXACTLY ONE git commit:
-  Message: "iflow iter $i: <short summary>"
-- If P2 path (requirements satisfied): only commit NEXT_REQUIREMENTS.md (no code changes).
-
-FAILURE FEEDBACK (authoritative)
-FAILURE SNIPPET BEGIN
+目前按照@SPEC.md 的定义，添加了检测，并@validate.sh会因为未实现功能失败，请实现对应功能，相关日志如下：
 {{FAIL}}
-FAILURE SNIPPET END
-
-OUTPUT FORMAT (MANDATORY; no extra text)
-DECISION:
-- PATH: P0 | P1 | P2
-- WHY: <1-3 bullets>
-
-CHANGELOG:
-- <file>: <bullets or NONE>
-
-COMMIT:
-- COMMIT_HASH: <hash or NONE>
-- FILES_COMMITTED: <list or NONE>
 `
 
 type Singleton struct {
@@ -260,8 +203,72 @@ func main() {
 
 		cleanup()
 
-		exitCode, output := validate()
+		files, err := os.ReadDir("./tasks")
+		if err != nil {
+			log.Fatalln("[FILE]", err.Error())
+		}
+		var tasks []string
+		for _, f := range files {
+			if f.IsDir() {
+				continue
+			}
+			name := "./tasks/" + f.Name()
+			tasks = append(tasks, name)
+		}
 
+		if len(tasks) == 0 {
+			log.Fatalln("[FILE]", "No Task")
+		}
+
+		task := tasks[0]
+
+		taskByte, err := os.ReadFile(task)
+
+		if err != nil {
+			log.Fatalln("[FILE]", task, err.Error())
+		}
+
+		taskStr := string(taskByte)
+		taskStr = "下面是我的需求，请在项目根目录生成一份`SPEC.md`\n 必须包含`不可修改条款`和`可验证验收标准`\n" + taskStr
+		os.WriteFile(iterationDir+"/spec-prompt.txt", []byte(taskStr), 0644)
+
+		for {
+			_, err := os.Stat("SPEC.md")
+			if !os.IsNotExist(err) {
+				log.Println("[FILE]", "SPEC.md exist")
+				break
+			}
+			cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
+			cmd.Stdin = strings.NewReader(taskStr)
+			execute(cmd, "IFLOW-SPEC")
+		}
+
+		specByte, err := os.ReadFile("./SPEC.md")
+
+		if err != nil {
+			log.Fatalln("[FILE]", "SPEC.md", err.Error())
+		}
+
+		cleanup()
+
+		specStr := string(specByte)
+		specStr = "下面是我的规范，请基于`不可修改条款`和`可验证验收标准`改动代码测试验证部分和测试脚本 @validate.sh\n 确保脚本因为未实现功能失败\n" + specStr
+		os.WriteFile(iterationDir+"/red-prompt.txt", []byte(specStr), 0644)
+		for {
+			cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
+			cmd.Stdin = strings.NewReader(specStr)
+			execute(cmd, "IFLOW-RED")
+			exitCode, _ := validate()
+			if exitCode != 0 {
+				log.Println("[RED]", "Validate Failed")
+				break
+			}
+			log.Println("[RED]", "Validate Success")
+		}
+
+		cleanup()
+
+		exitCode, output := validate()
 		cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
 		var prompt string
 		if exitCode != 0 {
@@ -270,8 +277,28 @@ func main() {
 			prompt = strings.ReplaceAll(promptTp, "{{FAIL}}", "")
 		}
 		os.WriteFile(iterationDir+"/work-prompt.txt", []byte(prompt), 0644)
-		cmd.Stdin = strings.NewReader(prompt)
-		execute(cmd, "IFLOW-WORK")
+		for {
+			exitCode, _ := validate()
+			if exitCode == 0 {
+				log.Println("[GREEN]", "Validate Success")
+				break
+			}
+			log.Println("[GREEN]", "Validate Failed")
+			cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
+			cmd.Stdin = strings.NewReader(prompt)
+			execute(cmd, "IFLOW-GREEN")
+		}
+
+		cleanup()
+
+		taskStr = string(taskByte)
+		taskStr = "下面是我的需求，请参考最近几次提交分析实现情况，并在tasks文件夹下创建进一步完善的需求或者是在此基础上实现新的需求\n" + taskStr
+		cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
+		cmd.Stdin = strings.NewReader(taskStr)
+		execute(cmd, "IFLOW-EVOLVE")
+
+		os.Rename(task, iterationDir+"/task.md")
+		os.Remove("./SPEC.md")
 
 		cleanup()
 
