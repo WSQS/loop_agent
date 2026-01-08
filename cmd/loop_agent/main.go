@@ -95,7 +95,8 @@ func cleanup() {
 	if dirty_flag, _ := is_repo_dirty(); !dirty_flag {
 		return
 	}
-	log.Println("[CLEANUP] Repo is dirty, clean up")
+	tag := "ITER-" + strconv.Itoa(GetInstance().iteration) + "-" + "CLEANUP" + "-" + strconv.Itoa(GetInstance().attemptCount)
+	log.Println("[" + tag + "] Repo is dirty, clean up")
 	for ; ; GetInstance().attemptCount++ {
 		dirty, files := is_repo_dirty()
 		if !dirty {
@@ -158,7 +159,7 @@ Output Expectations:
 		prompt = strings.ReplaceAll(prompt, "{{attempt}}", strconv.Itoa(GetInstance().attemptCount))
 		os.WriteFile(iterationDir+"/cleanup-"+strconv.Itoa(GetInstance().attemptCount)+"-prompt.txt", []byte(prompt), 0644)
 		cmd.Stdin = strings.NewReader(prompt)
-		execute(cmd, "IFLOW-CLEANUP")
+		execute(cmd, tag)
 	}
 	log.Println("[CLEANUP] Clean up finished")
 }
@@ -198,7 +199,8 @@ func main() {
 	execute(cmd, "GIT-STATUS")
 	for GetInstance().iteration = 1; GetInstance().iteration < 500; GetInstance().iteration++ {
 		func() {
-			defer trace("ITER")()
+			iterTag := "ITER-" + strconv.Itoa(GetInstance().iteration)
+			defer trace(iterTag)()
 
 			GetInstance().attemptCount = 1
 
@@ -210,7 +212,7 @@ func main() {
 			cleanup()
 
 			cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt", "/init")
-			execute(cmd, "IFLOW-INIT")
+			execute(cmd, iterTag+"-IFLOW-INIT")
 
 			cleanup()
 
@@ -275,7 +277,7 @@ func main() {
 				}
 				cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
 				cmd.Stdin = strings.NewReader(taskStr)
-				execute(cmd, "IFLOW-SPEC")
+				execute(cmd, iterTag+"-IFLOW-SPEC")
 			}
 
 			specByte, err := os.ReadFile("./SPEC.md")
@@ -292,7 +294,7 @@ func main() {
 			for {
 				cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
 				cmd.Stdin = strings.NewReader(specStr)
-				execute(cmd, "IFLOW-RED")
+				execute(cmd, iterTag+"-IFLOW-RED")
 				exitCode, _ := validate()
 				if exitCode != 0 {
 					log.Println("[RED]", "Validate Failed")
@@ -314,7 +316,7 @@ func main() {
 				os.WriteFile(iterationDir+"/green-"+strconv.Itoa(i)+"-prompt.txt", []byte(greenPrompt), 0644)
 				cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
 				cmd.Stdin = strings.NewReader(greenPrompt)
-				execute(cmd, "IFLOW-GREEN")
+				execute(cmd, iterTag+"-IFLOW-GREEN")
 			}
 
 			cleanup()
@@ -350,7 +352,7 @@ B) 可选路径：如果 "后续任务" 为空、过大、过时，或无法反�
 			cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
 			os.WriteFile(iterationDir+"/evolve-prompt.txt", []byte(taskStr), 0644)
 			cmd.Stdin = strings.NewReader(taskStr)
-			execute(cmd, "IFLOW-EVOLVE")
+			execute(cmd, iterTag+"-IFLOW-EVOLVE")
 
 			os.Rename(task, iterationDir+"/task.md")
 			os.Remove("./SPEC.md")
