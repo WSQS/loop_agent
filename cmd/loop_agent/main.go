@@ -161,7 +161,7 @@ Output Expectations:
 		cmd.Stdin = strings.NewReader(prompt)
 		execute(cmd, tag)
 	}
-	log.Println("[CLEANUP] Clean up finished")
+	log.Println("["+tag+"]", "Clean up finished")
 }
 
 func validate() (int, string) {
