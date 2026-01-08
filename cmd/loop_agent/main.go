@@ -44,6 +44,7 @@ func trace(tag string) func() {
 }
 
 func execute(cmd *exec.Cmd, tag string) {
+	defer trace(tag)()
 	command := cmd.String()
 	log.Println("[EXEC] command:", command)
 	stdout, err := cmd.StdoutPipe()
