@@ -35,7 +35,16 @@ func GetInstance() *Singleton {
 	return instance
 }
 
+func trace(tag string) func() {
+	start := time.Now()
+	log.Println("["+tag+"]", "begin")
+	return func() {
+		log.Println("["+tag+"]", "end", "seconds:", time.Since(start).Seconds())
+	}
+}
+
 func execute(cmd *exec.Cmd, tag string) {
+	defer trace(tag)()
 	command := cmd.String()
 	log.Println("[EXEC] command:", command)
 	stdout, err := cmd.StdoutPipe()
@@ -87,7 +96,8 @@ func cleanup() {
 	if dirty_flag, _ := is_repo_dirty(); !dirty_flag {
 		return
 	}
-	log.Println("[CLEANUP] Repo is dirty, clean up")
+	tag := "ITER-" + strconv.Itoa(GetInstance().iteration) + "-" + "CLEANUP" + "-" + strconv.Itoa(GetInstance().attemptCount)
+	log.Println("[" + tag + "] Repo is dirty, clean up")
 	for ; ; GetInstance().attemptCount++ {
 		dirty, files := is_repo_dirty()
 		if !dirty {
@@ -150,9 +160,9 @@ Output Expectations:
 		prompt = strings.ReplaceAll(prompt, "{{attempt}}", strconv.Itoa(GetInstance().attemptCount))
 		os.WriteFile(iterationDir+"/cleanup-"+strconv.Itoa(GetInstance().attemptCount)+"-prompt.txt", []byte(prompt), 0644)
 		cmd.Stdin = strings.NewReader(prompt)
-		execute(cmd, "IFLOW-CLEANUP")
+		execute(cmd, tag)
 	}
-	log.Println("[CLEANUP] Clean up finished")
+	log.Println("["+tag+"]", "Clean up finished")
 }
 
 func validate() (int, string) {
@@ -189,49 +199,51 @@ func main() {
 	cmd = exec.Command("git", "checkout", "-b", "ai/gen/loop-"+timestamp)
 	execute(cmd, "GIT-STATUS")
 	for GetInstance().iteration = 1; GetInstance().iteration < 500; GetInstance().iteration++ {
-		log.Println("[Iter]", "Iter", GetInstance().iteration, "begin")
+		func() {
+			iterTag := "ITER-" + strconv.Itoa(GetInstance().iteration)
+			defer trace(iterTag)()
 
-		GetInstance().attemptCount = 1
+			GetInstance().attemptCount = 1
 
-		iterationDir := GetInstance().dir + "/iter-" + strconv.Itoa(GetInstance().iteration)
-		if err := os.MkdirAll(iterationDir, 0755); err != nil {
-			log.Fatal(err)
-		}
-
-		cleanup()
-
-		cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt", "/init")
-		execute(cmd, "IFLOW-INIT")
-
-		cleanup()
-
-		files, err := os.ReadDir("./tasks")
-		if err != nil {
-			log.Fatalln("[FILE]", err.Error())
-		}
-		var tasks []string
-		for _, f := range files {
-			if f.IsDir() {
-				continue
+			iterationDir := GetInstance().dir + "/iter-" + strconv.Itoa(GetInstance().iteration)
+			if err := os.MkdirAll(iterationDir, 0755); err != nil {
+				log.Fatal(err)
 			}
-			name := "./tasks/" + f.Name()
-			tasks = append(tasks, name)
-		}
 
-		if len(tasks) == 0 {
-			log.Fatalln("[FILE]", "No Task")
-		}
+			cleanup()
 
-		task := tasks[0]
+			cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt", "/init")
+			execute(cmd, iterTag+"-IFLOW-INIT")
 
-		taskByte, err := os.ReadFile(task)
+			cleanup()
 
-		if err != nil {
-			log.Fatalln("[FILE]", task, err.Error())
-		}
+			files, err := os.ReadDir("./tasks")
+			if err != nil {
+				log.Fatalln("[FILE]", err.Error())
+			}
+			var tasks []string
+			for _, f := range files {
+				if f.IsDir() {
+					continue
+				}
+				name := "./tasks/" + f.Name()
+				tasks = append(tasks, name)
+			}
 
-		taskStr := string(taskByte)
-		specTp := `下面是我的需求。请在项目根目录生成一份 "SPEC.md"，并严格遵守以下要求：
+			if len(tasks) == 0 {
+				log.Fatalln("[FILE]", "No Task")
+			}
+
+			task := tasks[0]
+
+			taskByte, err := os.ReadFile(task)
+
+			if err != nil {
+				log.Fatalln("[FILE]", task, err.Error())
+			}
+
+			taskStr := string(taskByte)
+			specTp := `下面是我的需求。请在项目根目录生成一份 "SPEC.md"，并严格遵守以下要求：
 
 【必须包含的模块（使用这些标题）】
 1) 不可修改条款
@@ -255,63 +267,63 @@ func main() {
 
 下面是需求正文：
 `
-		taskStr = specTp + taskStr
-		os.WriteFile(iterationDir+"/spec-prompt.txt", []byte(taskStr), 0644)
+			taskStr = specTp + taskStr
+			os.WriteFile(iterationDir+"/spec-prompt.txt", []byte(taskStr), 0644)
 
-		for {
-			_, err := os.Stat("SPEC.md")
-			if !os.IsNotExist(err) {
-				log.Println("[FILE]", "SPEC.md exist")
-				break
+			for {
+				_, err := os.Stat("SPEC.md")
+				if !os.IsNotExist(err) {
+					log.Println("[FILE]", "SPEC.md exist")
+					break
+				}
+				cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
+				cmd.Stdin = strings.NewReader(taskStr)
+				execute(cmd, iterTag+"-IFLOW-SPEC")
 			}
-			cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
-			cmd.Stdin = strings.NewReader(taskStr)
-			execute(cmd, "IFLOW-SPEC")
-		}
 
-		specByte, err := os.ReadFile("./SPEC.md")
+			specByte, err := os.ReadFile("./SPEC.md")
 
-		if err != nil {
-			log.Fatalln("[FILE]", "SPEC.md", err.Error())
-		}
-
-		cleanup()
-
-		specStr := string(specByte)
-		specStr = "下面是我的规范，请基于`不可修改条款`和`可验证验收标准`改动代码测试验证部分和测试脚本 @validate.sh\n确保脚本因为未实现功能失败\n除了测试验证代码和@validate.sh禁止修改其他内容\n忽略`后续任务`部分内容，不要将其添加到测试中\n" + specStr
-		os.WriteFile(iterationDir+"/red-prompt.txt", []byte(specStr), 0644)
-		for {
-			cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
-			cmd.Stdin = strings.NewReader(specStr)
-			execute(cmd, "IFLOW-RED")
-			exitCode, _ := validate()
-			if exitCode != 0 {
-				log.Println("[RED]", "Validate Failed")
-				break
+			if err != nil {
+				log.Fatalln("[FILE]", "SPEC.md", err.Error())
 			}
-			log.Println("[RED]", "Validate Success")
-		}
 
-		cleanup()
+			cleanup()
 
-		for i := 1; ; i++ {
-			exitCode, output := validate()
-			if exitCode == 0 {
-				log.Println("[GREEN]", "Validate Success")
-				break
+			specStr := string(specByte)
+			specStr = "下面是我的规范，请基于`不可修改条款`和`可验证验收标准`改动代码测试验证部分和测试脚本 @validate.sh\n确保脚本因为未实现功能失败\n除了测试验证代码和@validate.sh禁止修改其他内容\n忽略`后续任务`部分内容，不要将其添加到测试中\n" + specStr
+			os.WriteFile(iterationDir+"/red-prompt.txt", []byte(specStr), 0644)
+			for {
+				cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
+				cmd.Stdin = strings.NewReader(specStr)
+				execute(cmd, iterTag+"-IFLOW-RED")
+				exitCode, _ := validate()
+				if exitCode != 0 {
+					log.Println("[RED]", "Validate Failed")
+					break
+				}
+				log.Println("[RED]", "Validate Success")
 			}
-			log.Println("[GREEN]", "Validate Failed")
-			greenPrompt := strings.ReplaceAll(promptTp, "{{FAIL}}", "[exit code:"+strconv.Itoa(exitCode)+"]"+output)
-			os.WriteFile(iterationDir+"/green-"+strconv.Itoa(i)+"-prompt.txt", []byte(greenPrompt), 0644)
-			cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
-			cmd.Stdin = strings.NewReader(greenPrompt)
-			execute(cmd, "IFLOW-GREEN")
-		}
 
-		cleanup()
+			cleanup()
 
-		taskStr = string(taskByte)
-		evolveTp := `下面是当前需求与上下文。请参考最近几次提交的实现情况，并在 "./tasks/" 文件夹下创建下一步任务（任务队列），满足以下规则：
+			for i := 1; ; i++ {
+				exitCode, output := validate()
+				if exitCode == 0 {
+					log.Println("[GREEN]", "Validate Success")
+					break
+				}
+				log.Println("[GREEN]", "Validate Failed")
+				greenPrompt := strings.ReplaceAll(promptTp, "{{FAIL}}", "[exit code:"+strconv.Itoa(exitCode)+"]"+output)
+				os.WriteFile(iterationDir+"/green-"+strconv.Itoa(i)+"-prompt.txt", []byte(greenPrompt), 0644)
+				cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
+				cmd.Stdin = strings.NewReader(greenPrompt)
+				execute(cmd, iterTag+"-IFLOW-GREEN")
+			}
+
+			cleanup()
+
+			taskStr = string(taskByte)
+			evolveTp := `下面是当前需求与上下文。请参考最近几次提交的实现情况，并在 "./tasks/" 文件夹下创建下一步任务（任务队列），满足以下规则：
 
 【目标（两条路径，择一或组合，但数量受控）】
 A) 优先路径：如果 @SPEC.md 中存在 "后续任务" 模块，落地为新的任务文件写入 "./tasks/"，过滤"tasks"中已有的任务。
@@ -337,17 +349,16 @@ B) 可选路径：如果 "后续任务" 为空、过大、过时，或无法反�
 
 下面是需求正文（供参考）：
 `
-		taskStr = evolveTp + taskStr
-		cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
-		os.WriteFile(iterationDir+"/evolve-prompt.txt", []byte(taskStr), 0644)
-		cmd.Stdin = strings.NewReader(taskStr)
-		execute(cmd, "IFLOW-EVOLVE")
+			taskStr = evolveTp + taskStr
+			cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
+			os.WriteFile(iterationDir+"/evolve-prompt.txt", []byte(taskStr), 0644)
+			cmd.Stdin = strings.NewReader(taskStr)
+			execute(cmd, iterTag+"-IFLOW-EVOLVE")
 
-		os.Rename(task, iterationDir+"/task.md")
-		os.Remove("./SPEC.md")
+			os.Rename(task, iterationDir+"/task.md")
+			os.Remove("./SPEC.md")
 
-		cleanup()
-
-		log.Println("[Iter]", "Iter", GetInstance().iteration, "end")
+			cleanup()
+		}()
 	}
 }
