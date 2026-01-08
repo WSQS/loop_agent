@@ -191,6 +191,7 @@ func main() {
 	for GetInstance().iteration = 1; GetInstance().iteration < 500; GetInstance().iteration++ {
 		func() {
 			log.Println("[Iter]", "Iter", GetInstance().iteration, "begin")
+			defer func() { log.Println("[Iter]", "Iter", GetInstance().iteration, "end") }()
 
 			GetInstance().attemptCount = 1
 
@@ -348,8 +349,6 @@ B) 可选路径：如果 "后续任务" 为空、过大、过时，或无法反�
 			os.Remove("./SPEC.md")
 
 			cleanup()
-
-			log.Println("[Iter]", "Iter", GetInstance().iteration, "end")
 		}()
 	}
 }
