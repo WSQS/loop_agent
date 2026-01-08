@@ -35,6 +35,14 @@ func GetInstance() *Singleton {
 	return instance
 }
 
+func trace(tag string) func() {
+	start := time.Now()
+	log.Println("["+tag+"]", "begin")
+	return func() {
+		log.Println("["+tag+"]", "end", "seconds:", time.Since(start).Seconds())
+	}
+}
+
 func execute(cmd *exec.Cmd, tag string) {
 	command := cmd.String()
 	log.Println("[EXEC] command:", command)
@@ -190,8 +198,7 @@ func main() {
 	execute(cmd, "GIT-STATUS")
 	for GetInstance().iteration = 1; GetInstance().iteration < 500; GetInstance().iteration++ {
 		func() {
-			log.Println("[Iter]", "Iter", GetInstance().iteration, "begin")
-			defer func() { log.Println("[Iter]", "Iter", GetInstance().iteration, "end") }()
+			defer trace("ITER")()
 
 			GetInstance().attemptCount = 1
 
