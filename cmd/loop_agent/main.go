@@ -165,8 +165,7 @@ Output Expectations:
 }
 
 func validate() (int, string) {
-	log.Println("[VALIDATE]", "Start")
-	defer log.Println("[VALIDATE]", "End")
+	defer trace("VALIDATE")()
 	cmd := exec.Command("./validate.sh")
 	out, err := cmd.CombinedOutput()
 	output := string(out)
