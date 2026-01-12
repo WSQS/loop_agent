@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"log"
 	"os"
@@ -166,7 +167,9 @@ Output Expectations:
 
 func validate() (int, string) {
 	defer trace("VALIDATE")()
-	cmd := exec.Command("./validate.sh")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "./validate.sh")
 	out, err := cmd.CombinedOutput()
 	output := string(out)
 	if err != nil {
