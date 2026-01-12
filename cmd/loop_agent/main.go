@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -14,14 +15,15 @@ import (
 )
 
 const promptTp = `
-目前按照@SPEC.md 的定义，添加了检测，并@validate.sh会因为未实现功能失败，请实现对应功能，相关日志如下：
+目前按照@SPEC.md 的定义，添加了检测，并@{{validate_script}}会因为未实现功能失败，请实现对应功能，相关日志如下：
 {{FAIL}}
 `
 
 type Singleton struct {
-	iteration    int
-	attemptCount int
-	dir          string
+	iteration      int
+	attemptCount   int
+	dir            string
+	validateScript string
 }
 
 var (
@@ -169,7 +171,7 @@ func validate() (int, string) {
 	defer trace("VALIDATE")()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "./validate.sh")
+	cmd := exec.CommandContext(ctx, GetInstance().validateScript)
 	out, err := cmd.CombinedOutput()
 	output := string(out)
 	if err != nil {
@@ -195,6 +197,12 @@ func main() {
 	defer f.Close()
 	log.SetOutput(io.MultiWriter(os.Stdout, f))
 	log.Println("[LOG] Log in ", GetInstance().dir)
+	if runtime.GOOS == "windows" {
+		GetInstance().validateScript = ".\\validate.bat"
+	} else {
+		GetInstance().validateScript = "./validate.sh"
+	}
+	log.Println("[OS]", "Running on:", runtime.GOOS, "using:", GetInstance().validateScript)
 	cmd := exec.Command("git", "status")
 	execute(cmd, "GIT-STATUS")
 	cmd = exec.Command("git", "checkout", "-b", "ai/gen/loop-"+timestamp)
@@ -253,14 +261,14 @@ func main() {
 
 【关键约束（非常重要）】
 - 你只允许在本次 "SPEC.md" 中定义“原子化的第一步工作”（Atomic Step 1）：
-  - 该步骤必须足够小，能够在一次迭代内实现并通过 "./validate.sh" 验证。
+  - 该步骤必须足够小，能够在一次迭代内实现并通过 @{{validate_script}} 验证。
   - 不要把所有功能一次性塞进第一步。
   - 在定义任务时要考虑当前的实现，不要将已经实现的内容定义为任务。
 - 其余未包含在第一步中的工作，必须拆分为 2~8 条“后续任务”，写入 "后续任务" 模块：
   - 每条后续任务必须是独立可实现、可验证的小步。
-  - 每条后续任务必须包含：任务标题 + 简要描述 + 可验证验收标准（至少 1 条）+ 最小测试计划（validate.sh 如何先失败再通过）。
+  - 每条后续任务必须包含：任务标题 + 简要描述 + 可验证验收标准（至少 1 条）+ 最小测试计划（@{{validate_script}} 如何先失败再通过）。
 - "可验证验收标准" 只针对“第一步工作”，不能覆盖后续任务。
-- 不要实现代码，不要修改 validate.sh；只生成/更新 "SPEC.md"。
+- 不要实现代码，不要修改 @{{validate_script}}；只生成/更新 "SPEC.md"。
 
 【输出要求】
 - 若 "SPEC.md" 已存在：仅在其缺失上述模块或未满足“原子化第一步 + 后续任务”要求时补全；否则不要重写。
@@ -268,7 +276,8 @@ func main() {
 
 下面是需求正文：
 `
-			taskStr = specTp + taskStr
+			specTaskStr := strings.ReplaceAll(specTp, "{{validate_script}}", GetInstance().validateScript)
+			taskStr = specTaskStr + taskStr
 			os.WriteFile(iterationDir+"/spec-prompt.txt", []byte(taskStr), 0644)
 
 			for {
@@ -291,7 +300,8 @@ func main() {
 			cleanup()
 
 			specStr := string(specByte)
-			specStr = "下面是我的规范，请基于`不可修改条款`和`可验证验收标准`改动代码测试验证部分和测试脚本 @validate.sh\n确保脚本因为未实现功能失败\n除了测试验证代码和@validate.sh禁止修改其他内容\n忽略`后续任务`部分内容，不要将其添加到测试中\n" + specStr
+			specStr = "下面是我的规范，请基于`不可修改条款`和`可验证验收标准`改动代码测试验证部分和测试脚本 @{{validate_script}}\n确保脚本因为未实现功能失败\n除了测试验证代码和@{{validate_script}}禁止修改其他内容\n忽略`后续任务`部分内容，不要将其添加到测试中\n" + specStr
+			specStr = strings.ReplaceAll(specStr, "{{validate_script}}", GetInstance().validateScript)
 			os.WriteFile(iterationDir+"/red-prompt.txt", []byte(specStr), 0644)
 			for {
 				cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
@@ -332,16 +342,16 @@ B) 可选路径：如果 "后续任务" 为空、过大、过时，或无法反�
 
 【严格要求】
 1) 本次最多创建 1～2 个“新的需求”任务文件（避免任务爆炸）,对"后续任务"数量不做限制。
-2) 每个新任务必须是“原子化的小步”，能够在一次迭代内完成并通过 "./validate.sh" 验证。
+2) 每个新任务必须是“原子化的小步”，能够在一次迭代内完成并通过 @{{validate_script}} 验证。
 3) 每个任务文件必须包含以下结构（使用这些标题）：
    - 标题
    - 背景/动机（为什么需要做）
    - 可验证验收标准（至少 2 条，必须可自动检查）
-   - 最小测试计划（validate.sh 如何先失败再通过）
+   - 最小测试计划（@{{validate_script}} 如何先失败再通过）
 4) 命名规范：任务文件名必须使用递增数字前缀，例如：
    - "002_<short_slug>.md"
    - "003_<short_slug>.md"
-5) 不要修改实现代码，不要修改 validate.sh；只创建任务文件
+5) 不要修改实现代码，不要修改 @{{validate_script}}；只创建任务文件
 6) 新任务文件不要和已有的"tasks"中的任务重复
 
 【完成条件】
@@ -350,7 +360,8 @@ B) 可选路径：如果 "后续任务" 为空、过大、过时，或无法反�
 
 下面是需求正文（供参考）：
 `
-			taskStr = evolveTp + taskStr
+			evolveStr := strings.ReplaceAll(evolveTp, "{{validate_script}}", GetInstance().validateScript)
+			taskStr = evolveStr + taskStr
 			cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
 			os.WriteFile(iterationDir+"/evolve-prompt.txt", []byte(taskStr), 0644)
 			cmd.Stdin = strings.NewReader(taskStr)
