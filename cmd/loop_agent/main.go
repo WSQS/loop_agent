@@ -198,7 +198,7 @@ func main() {
 	cmd := exec.Command("git", "status")
 	execute(cmd, "GIT-STATUS")
 	cmd = exec.Command("git", "checkout", "-b", "ai/gen/loop-"+timestamp)
-	execute(cmd, "GIT-STATUS")
+	execute(cmd, "GIT-CHECKOUT")
 	for GetInstance().iteration = 1; GetInstance().iteration < 500; GetInstance().iteration++ {
 		func() {
 			iterTag := "ITER-" + strconv.Itoa(GetInstance().iteration)
