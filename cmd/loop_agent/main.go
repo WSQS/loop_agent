@@ -325,6 +325,7 @@ func main() {
 				}
 				log.Println("[GREEN]", "Validate Failed")
 				greenPrompt := strings.ReplaceAll(promptTp, "{{FAIL}}", "[exit code:"+strconv.Itoa(exitCode)+"]"+output)
+				greenPrompt = strings.ReplaceAll(greenPrompt, "{{validate_script}}", GetInstance().validateScript)
 				os.WriteFile(iterationDir+"/green-"+strconv.Itoa(i)+"-prompt.txt", []byte(greenPrompt), 0644)
 				cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
 				cmd.Stdin = strings.NewReader(greenPrompt)
