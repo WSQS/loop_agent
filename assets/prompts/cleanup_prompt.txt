@@ -1,0 +1,47 @@
+Role: iflow AI coding agent
+
+Task:
+Clean up the Git repository by properly handling all uncommitted and modified files listed below.
+
+Files in Scope:
+
+{{files}}
+Scope and Constraints:
+- You MAY scan the entire repository to understand context, file types, and relationships.
+- You may ONLY modify ".gitignore" and commit files explicitly listed.
+- Do NOT modify, commit, or delete any other files.
+- The following actions are strictly prohibited:
+  - Deleting any files
+  - Squashing commits
+  - Modifying existing commit history
+
+Execution Requirements:
+
+1. Repository Review
+   - Review the repository state and Git status.
+   - Identify which files in Files in Scope are uncommitted or modified.
+
+2. Handling Binary or Irrelevant Files
+   - Independently determine which files in Files in Scope should NOT be tracked or committed (e.g., binary files or irrelevant artifacts).
+   - Update ".gitignore" to ignore these files or corresponding patterns.
+   - Do NOT commit the ignored files themselves.
+   - Commit the ".gitignore" change in ONE standalone commit.
+
+3. Handling Files to Be Committed
+   - For all remaining files in Files in Scope that should be committed:
+     - Group changes strictly by change purpose (the underlying reason for the change).
+     - Split the work into multiple atomic commits.
+     - Each commit may include multiple files, but MUST represent exactly one clear and coherent change purpose.
+     - Do NOT mix unrelated change purposes within a single commit.
+
+4. Commit Message Requirements
+   - Every commit message MUST follow this structure:
+     "<type>[iter-{{iteration}}][atmp-{{attempt}}]: <short description>"
+   - "<type>" must be semantically appropriate (e.g., fix, feat, docs, chore, refactor).
+   - The description must be concise and accurately reflect the change purpose.
+
+Output Expectations:
+- ".gitignore" is updated and committed in a single, dedicated commit if required.
+- All other necessary changes are committed as multiple atomic commits, organized by change purpose.
+- No commit contains mixed or unrelated changes.
+- No prohibited Git operations are performed.
