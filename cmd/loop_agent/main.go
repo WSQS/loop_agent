@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -226,24 +227,85 @@ func main() {
 
 			cleanup()
 
-			files, err := os.ReadDir("./tasks")
-			if err != nil {
-				log.Fatalln("[FILE]", err.Error())
-			}
-			var tasks []string
-			for _, f := range files {
-				if f.IsDir() {
-					continue
+			var task string
+
+			for i := 1; ; i++ {
+				files, err := os.ReadDir("./tasks")
+				if err != nil {
+					log.Fatalln("[FILE]", err.Error())
 				}
-				name := "./tasks/" + f.Name()
-				tasks = append(tasks, name)
+				var tasks []string
+				for _, f := range files {
+					if f.IsDir() {
+						continue
+					}
+					name := "./tasks/" + f.Name()
+					tasks = append(tasks, name)
+				}
+
+				if len(tasks) == 0 {
+					log.Fatalln("[FILE]", "No Task")
+				}
+
+				task = tasks[0]
+
+				taskByte, err := os.ReadFile(task)
+
+				if err != nil {
+					log.Fatalln("[FILE]", task, err.Error())
+				}
+
+				taskStr := string(taskByte)
+
+				taskFilterStr := "" +
+					"你是“需求文档维护器”。下面是需求文档@" + task + "。你必须结合项目当前内容判断需求是否“完全过时”。\n" +
+					"\n" +
+					"【过时(OUTDATED)定义】\n" +
+					"- 当且仅当：需求所描述的功能/行为已经在项目中“完全实现”。\n" +
+					"- 注意：即使仅缺少测试用例，也仍然算“完全实现”，应判定为过时。\n" +
+					"\n" +
+					"【允许的标记集合（硬约束）】\n" +
+					"- 你只允许在文档中新增以下标记之一：`[OUTDATED]`。\n" +
+					"- 严禁新增或输出任何其他状态标记，尤其严禁出现：`[COMPLETED]`、`COMPLETED`、`DONE`、`FINISHED`。（只要出现任意一个都算违反要求）\n" +
+					"\n" +
+					"【决策规则（硬约束）】\n" +
+					"1) 若你能在项目中找到充分证据表明“需求全部要点都已实现”（允许缺测试）：\n" +
+					"   - 仅在文档中增加标记`[OUTDATED]`（建议加在第一行或标题行末尾），其余内容不要做结构性改写。\n" +
+					"2) 否则（包括你无法确定是否完全实现）：\n" +
+					"   - 不得添加`[OUTDATED]`。\n" +
+					"   - 你必须更新需求文档内容，使其与项目当前实际一致。\n" +
+					"\n" +
+					"【输出与修改范围（硬约束）】\n" +
+					"- 你只允许修改这个文档本身，不得修改项目其他文件。\n" +
+					"- 你的输出必须是“修改后的文档全文”，不要附加解释、不要输出分析过程、不要输出额外段落。\n" +
+					"\n" +
+					"【需求文档内容】\n" + taskStr
+
+				os.WriteFile(iterationDir+"/task-filter-prompt-"+strconv.Itoa(i)+".txt", []byte(taskFilterStr), 0644)
+				cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
+				cmd.Stdin = strings.NewReader(taskFilterStr)
+				execute(cmd, iterTag+"-IFLOW-TASK-FILTER")
+
+				taskByte, err = os.ReadFile(task)
+
+				if err != nil {
+					log.Fatalln("[FILE]", task, err.Error())
+				}
+
+				taskStr = string(taskByte)
+				if strings.Contains(taskStr, "[OUTDATED]") {
+					log.Println("[FILE]", task, "is outdated")
+					err := os.Rename(task, filepath.Join(iterationDir, filepath.Base(task)))
+					if err != nil {
+						log.Fatal(err)
+					}
+				} else {
+					log.Println("[FILE]", task, "is Uptodate")
+					break
+				}
 			}
 
-			if len(tasks) == 0 {
-				log.Fatalln("[FILE]", "No Task")
-			}
-
-			task := tasks[0]
+			cleanup()
 
 			taskByte, err := os.ReadFile(task)
 
@@ -252,6 +314,7 @@ func main() {
 			}
 
 			taskStr := string(taskByte)
+
 			specTp := `下面是我的需求。请在项目根目录生成一份 "SPEC.md"，并严格遵守以下要求：
 
 【必须包含的模块（使用这些标题）】
