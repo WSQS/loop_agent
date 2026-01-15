@@ -40,7 +40,7 @@ jobs:
       - name: Upload build folder
         uses: actions/upload-artifact@v4
         with:
-          name: build-${{ runner.os }}-${{ github.ref_name }}-${{ github.sha }}
+          name: build-${{ runner.os }}-${{ github.sha }}
           path: build/**
           if-no-files-found: error
           retention-days: 14
