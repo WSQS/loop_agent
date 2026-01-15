@@ -202,7 +202,10 @@ func main() {
 				}
 
 				if len(tasks) == 0 {
-					log.Fatalln("[FILE]", "No Task")
+					createTastPrompt := `基于项目现状在tasks目录中创建一个新任务，定义一个适当的新特性`
+					cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt", createTastPrompt)
+					execute(cmd, iterTag+"-IFLOW-TASK-CREATE")
+					continue
 				}
 
 				task = tasks[0]
