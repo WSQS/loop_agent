@@ -62,10 +62,16 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Publish GitHub Release (upload both)
+      - name: Package release zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -lah dist
+          zip -r "loop_agent-${GITHUB_REF_NAME}.zip" dist
+
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/*.tar.gz
-            dist/*.zip
+            loop_agent-${{ github.ref_name }}.zip
           generate_release_notes: true
