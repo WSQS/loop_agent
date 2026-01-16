@@ -392,7 +392,7 @@ B) 可选路径：如果 "后续任务" 为空、过大、过时，或无法反�
 			cmd.Stdin = strings.NewReader(taskStr)
 			execute(cmd, iterTag+"-IFLOW-EVOLVE")
 
-			os.Rename(task, iterationDir+"/task.md")
+			os.Rename(task, filepath.Join(iterationDir, filepath.Base(task)))
 			os.Rename("./SPEC.md", iterationDir+"/SPEC.md")
 
 			cleanup()
