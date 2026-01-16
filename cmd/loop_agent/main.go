@@ -52,6 +52,10 @@ func trace(tag string) func() {
 
 func execute(cmd *exec.Cmd, tag string) {
 	defer trace(tag)()
+	iterationDir := GetInstance().dir + "/iter-" + strconv.Itoa(GetInstance().iteration)
+	f, err := os.OpenFile(filepath.Join(iterationDir, tag+".txt"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	log.SetOutput(io.MultiWriter(GetInstance().baseOutput, f))
+	defer log.SetOutput(GetInstance().baseOutput)
 	command := cmd.String()
 	log.Println("[EXEC] command:", command)
 	stdout, err := cmd.StdoutPipe()
