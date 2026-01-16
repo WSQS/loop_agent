@@ -27,6 +27,7 @@ type Singleton struct {
 	attemptCount   int
 	dir            string
 	validateScript string
+	baseOutput     io.Writer
 }
 
 var (
@@ -51,6 +52,10 @@ func trace(tag string) func() {
 
 func execute(cmd *exec.Cmd, tag string) {
 	defer trace(tag)()
+	iterationDir := GetInstance().dir + "/iter-" + strconv.Itoa(GetInstance().iteration)
+	f, err := os.OpenFile(filepath.Join(iterationDir, tag+".txt"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	log.SetOutput(io.MultiWriter(GetInstance().baseOutput, f))
+	defer log.SetOutput(GetInstance().baseOutput)
 	command := cmd.String()
 	log.Println("[EXEC] command:", command)
 	stdout, err := cmd.StdoutPipe()
@@ -154,7 +159,8 @@ func main() {
 		log.Fatal(err)
 	}
 	defer f.Close()
-	log.SetOutput(io.MultiWriter(os.Stdout, f))
+	GetInstance().baseOutput = io.MultiWriter(os.Stdout, f)
+	log.SetOutput(GetInstance().baseOutput)
 	log.Println("[LOG] Log in ", GetInstance().dir)
 	if runtime.GOOS == "windows" {
 		GetInstance().validateScript = ".\\validate.bat"
@@ -392,7 +398,7 @@ B) 可选路径：如果 "后续任务" 为空、过大、过时，或无法反�
 			cmd.Stdin = strings.NewReader(taskStr)
 			execute(cmd, iterTag+"-IFLOW-EVOLVE")
 
-			os.Rename(task, iterationDir+"/task.md")
+			os.Rename(task, filepath.Join(iterationDir, filepath.Base(task)))
 			os.Rename("./SPEC.md", iterationDir+"/SPEC.md")
 
 			cleanup()
