@@ -27,6 +27,7 @@ type Singleton struct {
 	attemptCount   int
 	dir            string
 	validateScript string
+	baseOutput     io.Writer
 }
 
 var (
@@ -154,7 +155,8 @@ func main() {
 		log.Fatal(err)
 	}
 	defer f.Close()
-	log.SetOutput(io.MultiWriter(os.Stdout, f))
+	GetInstance().baseOutput = io.MultiWriter(os.Stdout, f)
+	log.SetOutput(GetInstance().baseOutput)
 	log.Println("[LOG] Log in ", GetInstance().dir)
 	if runtime.GOOS == "windows" {
 		GetInstance().validateScript = ".\\validate.bat"
