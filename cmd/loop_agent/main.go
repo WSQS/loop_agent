@@ -359,7 +359,7 @@ func main() {
 				os.WriteFile(iterationDir+"/green-"+strconv.Itoa(i)+"-prompt.txt", []byte(greenPrompt), 0644)
 				cmd = exec.Command("iflow", "-y", "-d", "--thinking", "--prompt")
 				cmd.Stdin = strings.NewReader(greenPrompt)
-				execute(cmd, iterTag+"-IFLOW-GREEN")
+				execute(cmd, iterTag+"-IFLOW-GREEN-"+strconv.Itoa(i))
 			}
 
 			cleanup()
