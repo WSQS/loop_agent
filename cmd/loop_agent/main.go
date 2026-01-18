@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -14,7 +15,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/WSQS/loop_agent/assets/configs"
 	"github.com/WSQS/loop_agent/assets/prompts"
+	"github.com/pelletier/go-toml/v2"
 )
 
 const promptTp = `
@@ -131,21 +134,83 @@ func cleanup() {
 	}
 }
 
+type Test struct {
+	Name  string `toml:"name"`
+	Shell string `toml:"shell"`
+}
+
+type Config struct {
+	Tests []Test `toml:"tests"`
+}
+
+func loadTests(path string) ([]Test, error) {
+	b, err := os.ReadFile(path)
+
+	if os.IsNotExist(err) {
+		f, _ := configs.FS.ReadFile("tests.toml")
+		os.WriteFile(path, f, 0644)
+	}
+
+	b, err = os.ReadFile(path)
+
+	if err != nil {
+		log.Println("ReadFile", path, err)
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+
+	var cfg Config
+	if err := toml.Unmarshal(b, &cfg); err != nil {
+		log.Println("Toml Unmarshal", path, err)
+		return nil, fmt.Errorf("toml unmarshal: %w", err)
+	}
+
+	for i, t := range cfg.Tests {
+		if t.Name == "" {
+			log.Printf("tests[%d].name is empty\n", i)
+			return nil, fmt.Errorf("tests[%d].name is empty", i)
+		}
+		if t.Shell == "" {
+			log.Printf("tests[%d].shell is empty\n", i)
+			return nil, fmt.Errorf("tests[%d].shell is empty", i)
+		}
+	}
+
+	return cfg.Tests, nil
+}
+
 func validate() (int, string) {
 	defer trace("VALIDATE")()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, GetInstance().validateScript)
-	out, err := cmd.CombinedOutput()
-	output := string(out)
+	tests, err := loadTests(GetInstance().validateScript)
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			exitCode := exitErr.ExitCode()
-			return exitCode, output
-		}
-		return -1, err.Error() + output
+		log.Println("Failed to load tests:", err)
+		return -1, err.Error()
 	}
-	return 0, output
+	rc := 0
+	rs := ""
+	for _, t := range tests {
+		func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			log.Println("[VALIDATE]", "check", t.Name)
+			var cmd *exec.Cmd
+			if runtime.GOOS == "windows" {
+				cmd = exec.CommandContext(ctx, "cmd", "/c", t.Shell)
+			} else {
+				cmd = exec.CommandContext(ctx, "sh", "-lc", t.Shell)
+			}
+			out, err := cmd.CombinedOutput()
+			output := string(out)
+			if err != nil {
+				if exitErr, ok := err.(*exec.ExitError); ok {
+					rc = exitErr.ExitCode()
+				} else {
+					rc = -1
+				}
+				rs += t.Name + ":exit code:" + strconv.Itoa(rc) + " " + err.Error() + output + "\n"
+			}
+		}()
+	}
+	return rc, rs
 }
 
 func main() {
@@ -162,11 +227,7 @@ func main() {
 	GetInstance().baseOutput = io.MultiWriter(os.Stdout, f)
 	log.SetOutput(GetInstance().baseOutput)
 	log.Println("[LOG] Log in ", GetInstance().dir)
-	if runtime.GOOS == "windows" {
-		GetInstance().validateScript = ".\\validate.bat"
-	} else {
-		GetInstance().validateScript = "./validate.sh"
-	}
+	GetInstance().validateScript = "tests.toml"
 	log.Println("[OS]", "Running on:", runtime.GOOS, "using:", GetInstance().validateScript)
 	cmd := exec.Command("git", "status")
 	execute(cmd, "GIT-STATUS")

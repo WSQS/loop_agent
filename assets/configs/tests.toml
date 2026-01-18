@@ -1,0 +1,3 @@
+[[tests]]
+name = "example"
+shell = "git status"
